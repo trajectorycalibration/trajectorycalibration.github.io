@@ -1,21 +1,1011 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width initial-scale=1 user-scalable=no" />
-    <title>Spectacle</title>
-    <!--<link href="https://fonts.googleapis.com/css?family=Lobster+Two:400,700" rel="stylesheet" type="text/css">-->
-    <!--<link href="https://fonts.googleapis.com/css?family=Open+Sans+Condensed:300,700" rel="stylesheet" type="text/css">-->
-    <!--<link href="https://fonts.googleapis.com/css?family=Raleway" rel="stylesheet" type="text/css">-->
-    <link href="https://fonts.googleapis.com/css?family=Lato:100,200,300,400,500,600,700" rel="stylesheet" type="text/css">
-    <link href="https://fonts.googleapis.com/css?family=Roboto:100,200,300,400,500,600,700" rel="stylesheet" type="text/css">
-    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/prism/1.3.0/themes/prism-tomorrow.css">
-    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css">'
+    <title>Observability-Aware Trajectory Generation for Self-Calibration</title>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css" integrity="sha384-wITovz90syo1dJWVh32uuETPVEtGigN07tkttEqPv+uR2SE/mbQcG7ATL28aI9H0" crossorigin="anonymous">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js" integrity="sha384-/y1Nn9+QQAipbNQWU65krzJralCnuOasHncUFXGkdwntGeSvQicrYkiUBwsgUqc1" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js" integrity="sha384-dq1/gEHSxPZQ7DdrM82ID4YVol9BYyU7GbWlIwnwyPzotpoc57wDw/guX8EaYGPx" crossorigin="anonymous"></script>
+    <script>
+    document.addEventListener("DOMContentLoaded", function() {
+        renderMathInElement(document.body);
+    });
+    </script>
+    <script src="src/template.v1.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.slim.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/numeric/1.2.6/numeric.min.js" integrity="sha256-t7CAuaRhODo/cv00lxyONppujwTFFwUWGkrhD/UB1qM=" crossorigin="anonymous"></script>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script type="text/front-matter">
+        title: Framework for Observability-aware Trajectory Generation
+        description: Accounting for the observability of states in motion planning can result in more accurate state estimation. 
+        authors: 
+            - A. James E. Cagalawan: https://www.github.com/cglwn 
+        affiliations: 
+            - University of Waterloo: https://www.uwaterloo.ca
+    </script>
+    <style>
+    th {
+        text-align: left;
+    }
+    p {
+        text-indent: 0pt;
+    }
+    .hull {
+      fill: steelblue;
+      stroke: steelblue;
+      stroke-width: 32px;
+      stroke-linejoin: round;
+    }
+    .citation-number {
+        text-indent: 0pt;
+    }
+    </style>
+    <style>
+        .video-container {
+            text-align: center;
+        }
+
+        video {
+            object-fit: scale-down;
+        }
+
+        .interactive > figure:after {
+          overflow: visible;
+          content: "";
+          background-image: url("media/pointer.svg");
+          width: 27px;
+          height: 27px;
+          position: absolute;
+          top: 42px;
+          right: -80px;
+        }
+
+        .small-interactive > figure:after {
+          overflow: visible;
+          content: "";
+          background-image: url("media/pointer.svg");
+          width: 27px;
+          height: 27px;
+          position: absolute;
+          top: -20px;
+          right: 20px;
+        }
+
+        .hover-mouse {
+            cursor: hand;   
+        }
+
+        .hidden {
+
+        }
+
+    </style>
 </head>
 <body>
-    <div id="root"></div>
-    <script src="https://cdn.jsdelivr.net/prism/1.3.0/prism.js" type="text/javascript"></script>
-    <script src="https://cdn.jsdelivr.net/prism/1.3.0/components/prism-jsx.min.js" type="text/javascript"></script>
-    <script src="./dist/bundle.js"></script>
+    <dt-article>
+        <script type="text/article"></script>
+        <h1>Framework for Observability-aware Trajectory Generation</h1>
+        <h2>The robotics problem of moving between two points typically wants to minimize distance travelled. What if we wanted the robot to move in a way that allows it to localize better? What would trajectories look like? Use the interactive diagram below to find out.</h2>
+        <div class="interactive hover-mouse">
+            <figure>
+                <svg width="800" height="350" id="interactive-trajectory"></svg>
+                <figcaption class="hidden">Observability-aware trajectory generation for a point robot with calibration parameters tied to its position in the horizontal and vertical directions. To better observe these calibration parameters, the trajectory purposefully overshoots the goal position.</figcaption>
+            </figure>
+        </div>
+
+        <dt-byline></dt-byline>
+        <p><b><i>Abstract</i>—Many trajectory generation schemes exist to find shortest paths between two points, but these trajectories might leave robot states unobservable to the state estimator. In the interest of online self-calibration of robots, the question of <i>how to model measurements</i> to find the calibration parameters has seen a surge of interest. With that surge comes the question of <i>how the robot should move</i> in order to get the desired measurements for the models. We will look at one such scheme that addresses the problem through tools from dynamical systems formulated by <dt-cite key="hausman-2016observability">Hausman et. al.</dt-cite>. Then we will describe a simulation experiment to validate the framework. Our results show that this framework results in 21x better localization performance of a modified scalar double integrator system.
+            </b>
+        </p>
+        <h1>Introduction and Related Work</h1>
+        <p>
+            State estimation is a vital component of an autonomous system for its control. To tell a robot where to go, the controller must know where the robot is. State estimation algorithms use sensor measurements and interpret them through models to determine robot state. Sensors have their own set of states which must be known to use in the estimator's sensor model. These states are typically determined in a separate procedure outside of normal robot operation. For robots that want to autonomously operate for long periods of time, sensor degradation makes it necessary to recalibrate. The robot may be programmed to perform a standalone calibration routine, where it temporarily stops performing its primary task in order to calibrate itself. However, this downtime may be undesirable that want to maximize utilization of the robot such as in environmental monitoring, manufacturing, or transportation. Thus, being able to calibrate while operating would allow a robot to be more available for its designed task.
+        </p>
+        <p>
+        </p>
+        <p>
+            A problem of great research interest has been how to find calibration parameters such as the focal parameters of a camera, the wheel radius of a tire instrumented for odometry , or the angles between axes of an accelerometer.
+            An approach to calibration is the use of fiducial targets in an environment designed to find the calibration parameters in what is known as target-based calibration<dt-cite key="budzier_2015calibration,tan_2016correction"></dt-cite>.
+            The ground truth information from the targets are then compared with sensor measurements.
+            Using optimization, the calibration parameters for the sensor which best match measurements to ground truth are found.
+            For example, the focal parameters of a camera may be found by collecting data in an environment with hand-engineered patterns and comparing these patterns with what the camera sees.
+            With the establishment in target-based calibration methods, new research is directed at calibrating without targets in general environments to enable long-term autonomy.
+        </p>
+        <p>
+            Target-free calibration methods like in <dt-cite key="pandey_2015automatic,kelly_2011visual,levinson_2014unsupervised"></dt-cite> are designed to be run during regular robot operation, and have the advantage of being able to run without designing an environment. A sensor may degrade for a multitude of reasons, i.e., movement of a camera lens will change its focal parameters, vibration and shock during operation can shift the axis angles of an accelerometer, and tires deflate<dt-cite key="maye_2016online"></dt-cite>. To combat degradation, a state estimator can update these calibration states as part of its operation. However, the regular operation of a vehicle might not excite the sensor enough for calibration. For example, a car might experience only minimal upwards acceleration due to road flatness. To excite this this measurement, the car must deliberately choose trajectories have bumps. Thus, the trajectory of a vehicle thus affects the state estimation quality, however state estimation and trajectory generation are often treated independently.
+        </p>
+        <figure>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 630.45 265"><defs><style>.cls-1{fill:#f2f2f2;}.cls-2{fill:#999;}.cls-3{font-size:24px;}.cls-10,.cls-3{fill:#333;}.cls-3,.cls-6,.cls-8{font-family:ArialMT, Arial;}.cls-4{fill:none;stroke:#4d4d4d;stroke-miterlimit:10;}.cls-5,.cls-6,.cls-8{fill:#4d4d4d;}.cls-10,.cls-6{font-size:12px;}.cls-7{fill:#fff;}.cls-8{font-size:10px;}.cls-9{letter-spacing:-0.04em;}.cls-10{font-family:Arial-BoldMT, Arial;font-weight:700;}.cls-11{letter-spacing:-0.06em;}</style></defs><title>Motion Planner Block Diagram</title><g id="Other_Elements" data-name="Other Elements"><rect class="cls-1" x="75.43" y="0.5" width="441.62" height="264" rx="11.5" ry="11.5"/><path class="cls-2" d="M868.3,211a11,11,0,0,1,11,11V463a11,11,0,0,1-11,11H449.68a11,11,0,0,1-11-11V222a11,11,0,0,1,11-11H868.3m0-1H449.68a12,12,0,0,0-12,12V463a12,12,0,0,0,12,12H868.3a12,12,0,0,0,12-12V222a12,12,0,0,0-12-12Z" transform="translate(-362.75 -210)"/><text class="cls-3" transform="translate(215.53 28)">Motion Planner</text><line class="cls-4" x1="517" y1="154.5" x2="546.71" y2="154.5"/><path class="cls-5" d="M915.5,364.5a30.22,30.22,0,0,0-8.55,4.76l1.72-4.76L907,359.75A30.2,30.2,0,0,0,915.5,364.5Z" transform="translate(-362.75 -210)"/><text class="cls-6" transform="translate(555.75 158.02)">Control Inputs</text><line class="cls-4" x1="461.75" y1="154.5" x2="516.75" y2="154.5"/><rect class="cls-7" x="141.75" y="187.5" width="114" height="64" rx="11.5" ry="11.5"/><path class="cls-5" d="M607,398a11,11,0,0,1,11,11v41a11,11,0,0,1-11,11H516a11,11,0,0,1-11-11V409a11,11,0,0,1,11-11h91m0-1H516a12,12,0,0,0-12,12v41a12,12,0,0,0,12,12h91a12,12,0,0,0,12-12V409a12,12,0,0,0-12-12Z" transform="translate(-362.75 -210)"/><text class="cls-6" transform="translate(160.57 217)">Environmental<tspan x="-3" y="14.4" xml:space="preserve"> Decomposition</tspan></text><text class="cls-6" transform="translate(0 222.7)">Percepts</text><line class="cls-4" x1="49.75" y1="219.5" x2="134.71" y2="219.5"/><path class="cls-5" d="M503.5,429.5a30.22,30.22,0,0,0-8.55,4.76l1.72-4.76L495,424.75A30.2,30.2,0,0,0,503.5,429.5Z" transform="translate(-362.75 -210)"/><line class="cls-7" x1="49.75" y1="219.5" x2="140.75" y2="219.5"/><text class="cls-6" transform="translate(6.68 88.7)">Mission</text><rect class="cls-7" x="141.75" y="57.5" width="114" height="64" rx="11.5" ry="11.5"/><path class="cls-5" d="M607,268a11,11,0,0,1,11,11v41a11,11,0,0,1-11,11H516a11,11,0,0,1-11-11V279a11,11,0,0,1,11-11h91m0-1H516a12,12,0,0,0-12,12v41a12,12,0,0,0,12,12h91a12,12,0,0,0,12-12V279a12,12,0,0,0-12-12Z" transform="translate(-362.75 -210)"/><text class="cls-6" transform="translate(182.74 85.82)">Route<tspan x="-4.67" y="14.4">Planner</tspan></text><line class="cls-4" x1="49.75" y1="85.5" x2="134.71" y2="85.5"/><path class="cls-5" d="M503.5,295.5a30.22,30.22,0,0,0-8.55,4.76l1.72-4.76L495,290.75A30.2,30.2,0,0,0,503.5,295.5Z" transform="translate(-362.75 -210)"/><line class="cls-7" x1="49.75" y1="85.5" x2="140.75" y2="85.5"/><path class="cls-4" d="M619,429.5h48.5a10,10,0,0,0,10-10v-25a10,10,0,0,1,10-10h17" transform="translate(-362.75 -210)"/><path class="cls-5" d="M710.5,384.5a30.22,30.22,0,0,0-8.55,4.76l1.72-4.76L702,379.75A30.2,30.2,0,0,0,710.5,384.5Z" transform="translate(-362.75 -210)"/><path class="cls-4" d="M619,298.5h48.5a10,10,0,0,1,10,10v25a10,10,0,0,0,10,10h17" transform="translate(-362.75 -210)"/><path class="cls-5" d="M710.5,343.5a30.22,30.22,0,0,0-8.55,4.76l1.72-4.76L702,338.75A30.2,30.2,0,0,0,710.5,343.5Z" transform="translate(-362.75 -210)"/><text class="cls-8" transform="translate(259.09 229.5)">Environment</text><text class="cls-8" transform="translate(259.09 85.5)"><tspan class="cls-9">W</tspan><tspan x="9.07" y="0">aypoints</tspan></text><path class="cls-4" d="M677.5,394.25" transform="translate(-362.75 -210)"/><path class="cls-4" d="M677.5,401.25l-.25-8.37c-.14-4.61-4.75-8.39-10.25-8.4l-75-.2-20-.05-75-.2a10.06,10.06,0,0,1-10-10V323a8,8,0,0,1,8-8h3.46" transform="translate(-362.75 -210)"/><path class="cls-5" d="M504.5,315a30.22,30.22,0,0,0-8.55,4.76l1.72-4.76L496,310.25A30.2,30.2,0,0,0,504.5,315Z" transform="translate(-362.75 -210)"/></g><g id="Trajectory_Generator" data-name="Trajectory Generator"><rect class="cls-7" x="347.85" y="122.6" width="113.8" height="63.8" rx="11.4" ry="11.4"/><path class="cls-5" d="M813,333.2A10.81,10.81,0,0,1,823.8,344v41A10.81,10.81,0,0,1,813,395.8H722A10.81,10.81,0,0,1,711.2,385V344A10.81,10.81,0,0,1,722,333.2h91m0-1.2H722a12,12,0,0,0-12,12v41a12,12,0,0,0,12,12h91a12,12,0,0,0,12-12V344a12,12,0,0,0-12-12Z" transform="translate(-362.75 -210)"/><text class="cls-10" transform="translate(376.08 150.82)"><tspan class="cls-11">T</tspan><tspan x="6.67" y="0">rajectory </tspan><tspan x="1.67" y="14.4">Generator</tspan></text></g></svg>
+        <figcaption>
+            Block diagram for a robot motion planning system. The trajectory generator is responsible for deciding the control inputs.
+            </figcaption>
+        </figure>
+        <p>
+            Typical system decompositions of robot functionality decouples the tasks of state estimation and trajectory generation<dt-cite key="siegwart_introduction2004,thrun_probabilistic2005"></dt-cite> despite the dependency of estimator accuracy on the robot trajectory. A motion planner is responsible for converting a high-level mission description into control inputs. It uses information about the state of the robot and the environment to create a representation suitable for generating trajectories. <span id="goal">The primary concerns of trajectory generation are feasibility and safety. The control inputs it generates must satisfy the physical constraints of the robot, and the trajectory must avoid collisions with obstacles in the environments.</span> Methods exist to obtain a trajectory with other desirable qualities such as minimizing the distance travelled, the time spent, or the energy expended through optimization. With the desire to calibrate while operating a tighter coupling between the state estimation and motion planning components is justified. An approach to handling this coupling is given in <dt-cite key="hausman-2016observability"></dt-cite> which formulates a framework for generating observability-aware trajectories to improve state estimation accuracy.
+        </p>
+        <figure class="l-middle">
+            <div>
+                <video class="autoplay-video" controls>
+                    <source src="media/Trajectory Only.mp4"/>
+                </video>
+                <figcaption>
+                    Two possible trajectories from Position = 2 to Position = 5. The trajectory of the blue point accounts for the observability of its calibration parameters through a cost function formulated by <dt-cite key="preiss-2017trajectory">Hausman</dt-cite>.  Conversely, the trajectory of the green point does not account for observability and minimizes the trajectory's snap as designed by <dt-cite key="mellinger-2011snap">Mellinger and Kumar</dt-cite>. (Mouseover to control).
+                </figcaption>
+            </div>
+        </figure>
+        <p>
+            Observability-aware trajectories are trajectories which are designed to render states more observable. Observability is a property from the field of dynamical systems which decides whether the inputs and outputs of a dynamical system are enough to determine its state. 
+            By using this property, a trajectory generator can discern which trajectories will lead to higher accuracy state estimation. 
+            We will look at how observability is incorporated into trajectory generation for the specific problem of a robot whose mission is to safely move between two positions. This will require deriving a cost function, and parametrization of the trajectory which will be used by an optimizer.
+            This cost function extends a different cost function originally used for the deployment problem by <dt-cite key="krener-2009unobservability"></dt-cite>, and applies it to the trajectory generation problem.
+            The framework is validated through the simulation of a system and observe its effect on state estimation against another trajectory generation scheme which minimize snap, the fourth time derivative of position. 
+            Our simulation results indicate that observability-aware trajectories results in higher estimation accuracy when compared to the minimum-snap trajectory.
+        </p>
+        <hr/>
+        <h1>Observability-aware Trajectory Generation Framework</h1>
+        <p>
+        In general, a trajectory generator seeks to find a safe collision-free trajectory to achieve some mission. In our discussion we will consider the mission of travelling between two points in the environment. For these missions, the trajectory generator is given a start position \(p_{\mathrm{start}}\) and goal position \(p_{\mathrm{goal}}\). We will look at how trajectories can be generated that give us a path from \(p_{\mathrm{start}}\) to \(p_{\mathrm{goal}}\) which makes calibration states more observable. This trajectory generation method given by Preiss et al.<dt-cite key="preiss-2017trajectory"></dt-cite> uses a quality metric of the observability of the system to quantify how well a given trajectory would affect estimation accuracy.
+        </p>
+        <h2>Problem Setup</h2>
+        <h3>System Equations</h3>
+        <p>
+        We will consider systems of the form
+            $$
+            \begin{aligned}
+            \dot{\mathbf{x}} &= f(\mathbf{x}, \mathbf{u}) \\ 
+            \mathbf{z} &= h(\mathbf{x}) 
+            \end{aligned}
+            $$
+            where \(\mathbf{x}\) are the states of the system, \(\mathbf{u}\) are the control inputs, and \(\mathbf{z}\) are the measurements. The function \(f\) is the dynamics model of the system describing how the system evolves over time, and \(h\) is the measurement function relating states to measurements.
+
+            If a state is not affected by the dynamics of the system, and is not affected by other states or the inputs then it is a self-calibration state \(\mathbf{x}_{sc}\).
+        </p>
+        <h3>Environment</h3>
+        <p>
+            The environment we are planning in consists of convex polytopes \(\mathcal{P}_1, \mathcal{P}_2, \ldots, \mathcal{P}_n\) defined through half-plane constraints where each \(\mathcal{P}_i = \{ \mathbf{y} \in \mathbb{R}^k | \mathbf{A}_i\mathbf{y}\leq \mathbf{b}_i \} \). We will require that each adjacent polytope overlaps by constraining \(\mathcal{P}_i \cap \mathcal{P}_{i+1} \neq \emptyset\) and that \(p_{\mathrm{start}} \in \mathcal{P}_1\),  \(p_{\mathrm{goal}} \in \mathcal{P}_n\) to ensure that a path exists. The polytopes do not need to be bounded, but it is assumed that a higher level planner provides a perfect polytope representation of the environment <i>a priori</i>.
+        </p>        
+        <h2>Nonlinear Observability</h2>
+        <p>
+        A system is considered observable if the initial state can be determined from the inputs and outputs of the system. For nonlinear systems, there is a distinction between systems that are <i>globally observable</i> and <i>weakly locally observable</i>. If no two initial conditions \(\mathbf{x}_0(0)\) and \(\mathbf{x}_1(0)\) along with control input \(\mathbf{u}(t)\) have the same output \(\mathbf{z}(t)\), then the system is called globally observable. A system may not be globally observable, but still weakly locally observable if there are no two initial conditions \(\mathbf{x}_0(0)\) and \(\mathbf{x}_1(0)\) in the same neighbourhood that have the same output \(\mathbf{z}\)<dt-cite key="krener-2009unobservability"></dt-cite>.
+        </p>
+        <p>
+        There is a test using the nonlinear observability matrix which determines whether or not a nonlinear system is weakly locally observable. 
+        </p>
+        <h3>Nonlinear Observability Test</h3>
+        <p>
+            The \(i\)-th Lie derivative of a sensor model \(\mathbf{L}_i^h\) is defined through a recurrence relation. The \(0\)-th Lie derivative is given by the sensor model
+            $$
+                \mathbf{L}_0^h = h(\mathbf{x})
+            $$
+            and the consecutive Lie derivative is found through
+            $$
+            \begin{aligned}
+            \mathbf{L}_{i+1}^h &= \frac{\partial}{\partial t} \mathbf{L}_i^h \\[2ex]
+            &= \frac{\partial}{\partial t} \mathbf{L}_i^h \\[2ex]
+            &= \frac{\partial h}{\partial\mathbf{x}} \frac{\partial\mathbf{x}}{\partial t} \\[2ex]
+            &= \frac{\partial \mathbf{L}_i^h}{\partial \mathbf{x}} f(\mathbf{x}, \mathbf{u}).
+            \end{aligned}
+            $$
+            We denote the state derivative of the \(i\)-th Lie derivative by
+            $$
+            \nabla \mathbf{L}_i^h = \frac{\partial \mathbf{L}_i^h}{\mathbf{x}}
+            $$
+            and use it to construct the nonlinear observability matrix:
+            $$
+            \mathbf{O}(\mathbf{x}, \mathbf{u})=
+            \begin{bmatrix}
+            \nabla \mathbf{L}_0^h \\[1ex]
+            \nabla \mathbf{L}_1^h \\[1ex]
+            \vdots \\[1ex]
+            \nabla \mathbf{L}_k^h
+            \end{bmatrix}
+            $$
+            which has full column rank for some \(k\) if and only if the system is weakly locally observable. While this property is informative, it only tells us whether the system is observable, or not observable. In order to generate an objective function for observability, we need a metric of how well observable a system is.
+        </p>
+        <p>
+        </p>
+        <h2>Observability Quality Metric</h2>
+        <p>
+            <dt-cite key="preiss-2017trajectory">Preiss et al.</dt-cite> formulate a metric for the quality of observability. To understand how it works, we introduce what it means for a state to be <i>well</i> observable and what it means for a state to be <i>poorly</i> observable. Well observable states—those with a high quality of observability,—are those which have a large effect on the output of the system when slightly perturbed. In contrast, states are poorly observable and have a low quality of observability when a large perturbation in the state results in little to no change in the output. The quality of observability may be measured through the local observability Gramian (LOG) matrix.
+        </p>
+        <h3>Linear Algebra Preliminaries</h3>
+        <p>
+            We will review basic properties of matrices that are used to formulate a observability quality  metric. Let \(\mathbf{A}\) be an \(m \times n\) matrix. The <i>null space</i> of \(\mathbf{A}\) is \(\mathrm{Null}(\mathbf{A}) = \{\mathbf{x} \in \mathbb{R}^n \,|\,\mathbf{Ax} = \mathbf{0} , \mathbf{x} \neq \mathbf{0}\}\), i.e., the set of non-trivial vectors \(\mathbf{x}\) which map to the zero vector \(\mathbf{0}\). If \(\mathrm{dim}(\mathrm{Null}(\mathbf{A})) > 0\), then the matrix is not full rank as a consequence by the Rank-Nullity theorem which states
+            $$
+            \textrm{Rank}(\mathbf{A}) + \mathrm{dim(Null}(\mathbf{A})) = n.
+            $$
+            Such a matrix with a non-empty null space is non-invertible and we say that \(\mathbf{A}\) is <i>singular</i>. 
+        </p>
+        <p>
+            The singular value decomposition of a matrix \(\mathbf{A}=\mathbf{USV}\) results in three components: an orthonormal matrix, a diagonal matrix, and another orthonormal matrix. \(\mathbf{U}\) and \(\mathbf{V}\) are the orthonormal matrices and \(\mathbf{S}\) is a diagonal matrix giving the <i>singular values</i> of the matrix where 
+            $$
+            \mathbf{S} = \mathrm{diag}(\sigma_1, \sigma_2, \ldots,\sigma_n).
+            $$
+            The singular values of a matrix can be used to determine its rank, and thus its singularity.
+        </p>
+        <p>
+            <b>Lemma:</b> If a matrix \(\mathbf{A}\) with \(\mathrm{Rank}(\mathbf{A}) = r\), then  A has \(r\) non-zero singular values.
+        </p>
+        <p>
+            <b>Corollary:</b> If a matrix has one or more zero singular value, then the matrix is singular and thus has a non-empty null space.
+        </p>
+        </p>
+        <p>
+            Thus, the null space of a matrix gives us the values which the matrix maps to the zero vector. Moreso, the size of the null space can be determined through singular value decomposition through examination of the diagonal matrix \(\mathbf{S}\). These singular values of a matrix can be used to quality how close to singularity a matrix is, where the smallest singular value is the component closest to singularity.
+        </p>
+        <h3>Local Observability Gramian (LOG)</h3>
+        <p>
+            The use of the local observability Gramian to measure how well a system is observable was introduced by <dt-cite key="krener-2009unobservability">Krener and Ide</dt-cite>.
+            $$
+            \mathbf{W_O}(0, T) = \int_0^T \mathbf{\Phi}(0,t)^T\mathbf{H}(t)^T\mathbf{H}(t)\mathbf{\Phi}(0, t) dt,
+            $$
+            where \(\mathbf{\Phi}(0,t)\) is the state transition matrix bringing state at time \(0\) to time \(t\)
+            $$
+            \mathbf{x}(t) = \mathbf{\Phi}(0, t)\mathbf{x}(0),
+            $$
+            and \(\mathbf{H}(t)\) is the state derivative of the sensor model
+            $$
+            \mathbf{H}(t)=\frac{\partial}{\partial \mathbf{x}}h(t)
+            $$
+            for some trajectory over the time interval \(t \in [0,T]\). The null space of the LOG gives the unobservable subspace \(\mathcal{U}_O\) of the state space<dt-cite key="hespanha-2009systems"></dt-cite>. States in \(\mathcal{U}_O\) are the unobservable states of the system. Thus, if the LOG matrix has an empty null space, the system is observable.
+        </p>
+        <p>
+            The singular values of the LOG give the observability metric we seek for observability-aware trajectory generation. The element \([\mathbf{W_O}]_{i,j}\) gives the effect of state \(x_j\) on output \(z_i\). The \(j\)-th singular values of \(\mathbf{W_O}\) is a measure of the distance of the state \(x_j\) is from the unobservable subspace \(\mathcal{U}_O\). States which have larger singular values are more well observable, and states with the lowest singular values are the least observable. The smallest singular value is the observability of the least observable state and thus, the maximization of the smallest singular value of the LOG may be used as our cost function.
+        </p>
+        <p>
+            In practice, calculating the LOG is expensive due to the presence of the state transition matrix \(\mathbf{\Phi}(0, t)\) in the integral which may not have a closed form solution for many nonlinear systems. Approximations of the LOG whose null space has the same properties of quantifying observability quality must thus be made for use in an optimization framework.
+        </p>
+        <h3>Expanded Empirical Local Observability Gramian (E\(^2\)LOG)</h3>
+        <p>
+        The E\(^2\)LOG avoids the expensive calculation of the state transition matrix by using an approximation of the sensor model Jacobian, which is denoted as \(K_{t_0}(t) = \frac{\partial}{\partial \mathbf{x}}h(t)\) obtained by Taylor expansion of \(h(t)\) around time \(t_0\):
+        $$
+        \begin{aligned}
+        h_{t_0}(t)
+        &= h_{t_0}(\mathbf{x}(t), \mathbf{u}(t)) \\[2ex]
+        &= \sum_{i=0}^n \frac{(t-t_0)^i}{i!}\frac{\partial ^ i}{\partial t^i}h\left(\mathbf{x}(t_0), \mathbf{u}(t_0)\right) \\[2ex]
+        &=\sum_{i=0}^n \frac{(t-t_0)^i}{i!} \mathbf{L}_h^i(\mathbf{x}(t_0), \mathbf{u}(t_0)),
+        \end{aligned}
+        $$
+        and differentiating it with respect to the state to obtain
+        $$
+        \begin{aligned}
+        K_{t_0}(t) 
+        &= \frac{\partial}{\partial \mathbf{x}}h_{t_0}(t) \\[2ex]
+        &= \frac{\partial}{\partial \mathbf{x}}\sum_{i=0}^n \frac{(t-t_0)^i}{i!} \mathbf{L}_h^i(\mathbf{x}(t_0), \mathbf{u}(t_0)) \\[2ex]
+        &= \sum_{i=0}^n \frac{(t-t_0)^i}{i!} \frac{\partial}{\partial \mathbf{x}}\mathbf{L}_h^i(\mathbf{x}(t_0), \mathbf{u}(t_0)) \\[2ex]
+        &= \sum_{i=0}^n \frac{(t-t_0)^i}{i!}\nabla \mathbf{L}_h^i(\mathbf{x}(t_0), \mathbf{u}(t_0)). \\[2ex]
+        \end{aligned}
+        $$
+        This Jacobian reveals the effects of states on outputs and is used to approximate the LOG in the <i>Expanded Empirical Local Observability Gramian</i> (E\(^2\)LOG) matrix:
+        $$
+        \mathbf{W_O}'(0,T,\Delta t) = \int_0^T K_t(t + \Delta t)^TK_t(t + \Delta t) dt,
+        $$
+        where the approximated Jacobian is evaluated some small time \(\Delta t\) ahead of the linearization point in order to incorporate states which do not directly appear in the measurement model. This accounting of system dynamics is made possible with the incorporation of higher-order Lie derivatives in the linearization, which was not previously done in another approximation<dt-cite key="krener-2009unobservability"></dt-cite>.
+        </p>
+        <p>       
+            The \(E^2\)LOG is used in place of the LOG due to its relative ease of computation, and its singular values will be used as part of our optimization. The order of the Taylor expansion is dependent on the number of Lie derivatives required to make the system observable. Blocks of the E\(^2\)LOG can be narrowed to incorporate only the self-calibration states \(\mathbf{x}_{sc}\) whose observability we want to improve in the trajectory. Its computation doesn't include find a system's state transition matrix, which might not have an analytic solution. Thus, maximizing the smallest singular value of the E\(^2\)LOG gives trajectories that make the least observable state more observable.
+        </p>
+        <h2>Representing Trajectory</h2>
+        <p>
+            In order to formulate our problem as an optimization problem, a formal description of what the trajectory is and how to represent it is needed along with an optimizable trajectory parametrization that guarantees safe, collision-free trajectories. 
+        </p>
+        <h3>Differentially Flat Systems</h3>
+        <p>
+            For trajectory representation, we look at the notion of differentially flat outputs of a system to represent trajectories as in <dt-cite key="mellinger-2011snap"></dt-cite>. A differentially flat system has states \(\mathbf{x}\) and inputs \(\mathbf{u}\) which can be computed as an invertible function of a subset of the outputs called flat outputs \(\mathbf{y}\) and a finite number of its derivatives such that
+            $$
+            \begin{aligned}
+            \mathbf{x} &= \zeta(\mathbf{y}, \dot{\mathbf{y}}, \mathbf\ldots, \mathbf{y}^{(n)}) \\
+            \mathbf{u} &= \psi(\mathbf{y}, \dot{\mathbf{y}}, \mathbf\ldots, \mathbf{y}^{(m)}).
+            \end{aligned}
+            $$
+            The trajectory of the system will be expressed in terms of the flat outputs. From the flat outputs, the states inputs to provide to a controller may be obtained through inversion.
+        </p>
+        <h3>Bézier Curves</h3>
+        <div class="interactive">
+            <figure>
+                <svg width="800" height="400" id="convex-bezier"></svg>
+                <figcaption>The degree-3 Bézier curve (in black), its control points (in blue), and the convex hull of the control points (in gray). Note how the Bézier curve is always in the convex hull.</figcaption>
+            </figure>
+        </div>
+        <p>
+            For simplicity in optimization, the trajectory \(\mathbf{y}(t)\) is as a piecewise \(k\)-piece, degree-\(d\) polynomial and to guarantee collision-free paths assuming a perfectly known environment, the polynomials will be represented by a Bézier curve . A Bézier curve is a degree-\(d\) polynomial defined by \(d+1\) control points \(\mathbf{y}_i \in \mathbb{R}^k\) such that
+            $$
+            f(\tau) = b_{0,d}(\tau)\mathbf{y}_0 + b_{1,d}(\tau)\mathbf{y}_1 + \cdots + b_{d,d}(\tau)\mathbf{y}_d,
+            $$
+            for \(\tau \in [0,1]\) and where
+            $$
+            b_{i,j}(\tau) = {j \choose i}\tau^i(1-\tau)^{j-i}, \quad i=0,1,\ldots,n.
+            $$
+            The Bézier curve has the property that it is constrained to the convex hull of its control points as in the figure above. Thus by placing a Bézier curve inside each polytope and adding constraints to the control points that they satisfy the half-plane constraints will guarantee collision-free trajectories.
+        </p>
+        <h2>Optimization Objective</h2>
+        <p>
+            With the tools to quantify the quality of observability and represent the trajectory, the objective function which will be used to generate observability-aware trajectories is
+            $$
+            \begin{aligned}
+            &\mathrm{arg\,max}_{\mathbf{y}(t)} \,\sigma_{\mathrm{min}}(\mathbf{W_O}(0,T,\Delta t)) \\
+            &\text{s.t.} \qquad
+            \mathbf{A}_i\mathbf{y}_{i,k} \leq \mathbf{b}_i \\
+            \end{aligned}
+            $$
+            where \(\sigma_{\text{min}}(\cdot)\) extracts the smallest singular value,\(\mathbf{y}_{i,k}\) is the \(k\)-th control point of the Bézier curve inside \(\mathcal{P}_i\). Additional constraints may be added as such as constraining the dynamics at the endpoints, enforcing maximum values on the inputs, and restrictions based on the physical limits of the system. Depending on the constraints and the degree of the Bézier curve, the problem may be solved directly through a linear solve or least squares. If nonlinear inequalities are present, the designers of the framework suggest the Sequential Quadratic Programming (SQP) method as an effective optimization tool.
+        </p>
+        <h3>External Results</h3>
+        <p>
+        The method has been trialed in simulation<dt-cite key="preiss-2017trajectory"></dt-cite> for a visual-inertial sensor suite on a quadrotor and in practice<dt-cite key="hausman-2016observability"></dt-cite> for a IMU-GPS sensor suite. In both cases, they show that the calibration parameters are estimated with higher accuracy resulting in a 2-4x improvement in position estimation when compared with a trajectory generated by the minimum snap. Their method was also compared with simulating a trajectory through an Extended Kalman Filter, and minimizing the trace of the covariance. The simulated state estimator resulted in better final position error but took 11 hours to run compared to 10 minutes using E\(^2\)LOG.
+        </p>
+        <hr/>
+        <h1>Simulation</h1>
+        <div class="simulation-video l-screen-inset">
+            <figure class="l-screen-inset">
+                <div class="video-container">
+                    <video src="media/Full System.mp4" class="autoplay-video" style="{object-fit: scale-down;}" controls></video>
+                </div>
+                <figcaption class="l-middle">
+                The evolution of states, inputs, and outputs of our simulated laser rangefinder system for the E\(^2\)LOG trajectory and for the minimum snap trajectory. Note that the measurement plots reflect a continuous model for visualization purposes. In the simulation of our system, these measurements occur at discrete time intervals according to a set rate.
+                </figcaption>
+            </figure>
+        </div>
+        <p>
+        We implement the method of maximizing the smallest singular value of the E\(^2\)LOG on a scalar double integrator system, as well as the minimum snap trajectory proposed in <dt-cite key="mellinger-2011snap"></dt-cite>. We also implement an Extended Kalman Filter (EKF), a popular and effective choice for state estimation of mildly nonlinear systems<dt-cite ey="barfoot_2017state"></dt-cite> and measure its effectiveness over multiple generated trajectories with random initial state estimates and start and goal positions. We obtain similar results as in <dt-cite key="hausman-2016observability,preiss-2017trajectory"></dt-cite> observing a reduced position error, as well as more accurate estimation of the self-calibration state using the E\(^2\)LOG-based cost function when compared to minimum snap.
+        </p>
+        <h2>Simulation Setup</h2>
+        <p>
+            We have a scalar point robot with a global positioning system (GPS) and a laser rangefinder (LRF). The GPS provides absolute positions, but its measurements have low frequency and a large amount of noise compared to the LRF which gives higher frequency measurements with lower noise. The LRF measurements are affected by a multiplicative scale parameter which must be calibrated for. This setup reflects field setups where the low frequency and high noise of GPS are supplemented with another sensor using sensor fusion<dt-cite key="barfoot_2017state,levinson-2010robust"></dt-cite>. The scale calibration parameter for the LRF is also realistic and matches known models of calibration for LRF sensors<dt-cite key="habib_geometric2011,tan_2016correction"></dt-cite>. We further assume that the LRF and GPS report ranges in the body frame of the robot. 
+        </p>
+        <h3> System Equations</h3>
+        <p>
+            Our system has state vector \( \mathbf{x}=\begin{bmatrix}x && \dot{x} && s\end{bmatrix}^T \), where \(x\) is the system's position and \(s\) is the scale parameter of the LRF. We have a single input \(\mathbf{u} = \begin{bmatrix}\ddot{x}\end{bmatrix}\), and the measurements \(\mathbf{z} = \begin{bmatrix}z_{\text{GPS}} && z_{\text{LRF}}\end{bmatrix}^T\) corresponding to the range measurements of each of the sensors. Our system equations are:
+            $$
+            \begin{aligned}
+            \dot{\mathbf{x}} &= 
+            \begin{bmatrix}
+            0 && 1 && 0 \\
+            0 && 0 && 0 \\ 
+            0 && 0 && 0
+            \end{bmatrix}
+            \mathbf{x}
+            +
+            \begin{bmatrix}
+            0 \\ 1 \\ 0
+            \end{bmatrix}
+            \mathbf{u} \\[4ex]
+            \mathbf{z} &= 
+            \begin{bmatrix}
+            x\\
+            xs
+            \end{bmatrix},
+            \end{aligned}
+            $$
+            and we have a single self-calibration parameter of the range scale \(\mathbf{x}_{sc}=s\). We further constrain the system to be in \([0, 10]\) as our environment.
+        <h3>Observability Analysis</h3>
+        <p>
+            The system is observable given the test provided by the nonlinear observability matrix. Two Lie derivatives are needed to make the system observable:
+            $$
+            \begin{aligned}
+            \nabla {\mathbf{L}}_0^h &= 
+            \begin{bmatrix}
+            1 && 0 && 0\\
+            s && 0 && p
+            \end{bmatrix}\\[2ex]
+            \nabla {\mathbf{L}}_1^h &=
+            \begin{bmatrix}
+            0 && 1 && 0\\
+            0 && s && v
+            \end{bmatrix},
+            \end{aligned}
+            $$
+            resulting in the observability matrix 
+            $$
+            \mathbf{O}(\mathbf{x}, \mathbf{u}) = 
+            \begin{bmatrix}
+            1 && 0 && 0\\
+            s && 0 && p\\
+            0 && 1 && 0\\
+            0 && s && v
+            \end{bmatrix}
+            $$
+            Since \(\mathbf{O}(\mathbf{x}, \mathbf{u})\) has full column rank, the system is observable.
+        </p>
+        <h3>Differential Flatness</h3>
+        <p>
+            Following the example for the UAV experiment given by <dt-cite key="hausman-2016observability">Hausman et al.</dt-cite>, we show differentiall flat outputs for the states which are not self-calibration states, as well for the input. We have the diferentially flat output of \(z_{\text{GPS}}\) with functions
+            $$
+            \begin{aligned}
+            \begin{bmatrix}
+            x \\ \dot{x}
+            \end{bmatrix}
+            &=
+            \begin{bmatrix}
+            z_{\text{GPS}}\\
+            \dot{z}_{\text{GPS}}
+            \end{bmatrix}\\[2ex]
+            \begin{bmatrix}
+            \ddot{x}
+            \end{bmatrix}
+            &=
+            \begin{bmatrix}
+            \ddot{z}_{\text{GPS}}
+            \end{bmatrix}
+            \end{aligned}
+            $$
+            thus we may perform trajectory generation in the output space of \(z_{\mathrm{GPS}}\).
+        </p>
+        <h3>Simulation Parameters</h3>
+        <p>
+            We chose hyperparameters for our experiment trying to match real world scenarios when possible. Our experiments have a ground truth value for the range scale of \(s=1.2\). The frequency of the LRF is 100 Hz, and its range measurements have a standard deviation of 0.02 m. The GPS has a frequency of 0.5 Hz, and its measurements have a standard deviation of 5 m which is realistic for GPS where the satellite signal is weak<dt-cite key="kaartinen_2015accuracy"></dt-cite>. The start and goal positions are randomly sampled over the environment and the initial estimates of the EKF are within 1 metre of the true initial state. Each trajectory generated are 10 seconds long for both types of trajectories. Velocity, acceleration, and higher order derivatives of position are zero at the start and end of the endpoints, and the acceleration \(\ddot{x} \leq 2\mathrm{m/s}\). For our experiments, we perform 1000 trials each time randomly drawing from the described distributions.
+        </p>
+        <h2>Results</h2>
+
+            <figure>
+                <img src="media/EKF Simulation Results.png"></img>
+                <figcaption>
+                <span><i>Above</i>: The scale estimate of the EKF  for a representative trajectory.</span><br/>
+                <span><i>Below</i>:  Mean position error estimate and uncertainty  with E\(^2\)LOG and Min Snap trajectories aggregated over 1000 trials.</span>
+                </figcaption>
+            </figure>
+            </div>
+<!--             <div class="l-gutter small-interactive">
+                <figure>
+                <svg id="interactive-system" class="interactive" width="100" height= 200>
+                    <rect width="100%" height="100%" fill="#eaeaf2"></rect>
+                </svg>
+                <figcaption>Representative trajectories of our simulation</figcaption>
+                </figure>
+            </div>-->         
+            <p>
+                The E\(^2\)LOG trajectory results in convergence to the ground truth of the scale estimate while the minimum snap trajectory does not. As a result, the final position error is lower in the E\(^2\)LOG trajectories than in the minimum snap trajectories. Between 3.8s and 6.4s, the position error for the E\(^2\)LOG trajectory is higher than the minimum snap  trajectory. We suspect that the more aggressive maneuvers performed by the minimum snap trajectory resulted in larger errors accumulating in the update step of the EKF but have not yet determined the root cause.
+            </p>
+            <table>
+                <thead>
+                    <tr>
+                        <th><i>Errors accumulated over 1000 trials</i></th>
+                        <th>E\(^2\)LOG</th>
+                        <th>Minimum Snap</th>
+                    </tr>
+                </thead>
+                <tbody>=
+                    <tr>
+                        <td>Final Mean Error (m)</td>
+                        <td>0.012</td>
+                        <td>0.216</td>
+                    </tr>
+                    <tr>
+                        <td>Final Standard Deviation (m)</td>
+                        <td>0.021</td>
+                        <td>0.055</td>
+                    </tr>
+                    <tr>
+                        <td>Integrated RMS Error (m)</td>
+                        <td>176.8</td>
+                        <td>211.3</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>
+                In our simulation, we see a 21x better final mean error and half the final standard deviation in position for the E\(^2\)LOG trajectory compared against the minimum snap trajectory. This greatly exceeds the 4x improvement seen by <dt-cite key="preiss-2017trajectory"></dt-cite> in their simulation and suspect this discrepancy is due to the simplicity of our system. The integrated RMS error is also lower for the E\(^2\)LOG trajectories, indicating that the errors from that time period where minimum snap performs better do not cause the E\(^2\)LOG trajectory to have overall worse performance. Thus, we see that the consideration for self-calibration states in trajectory generation can improve estimation accuracy, and that the E\(^2\)LOG framework is suitable for generating observabbility-aware trajectories.
+            </p>
+        </div>
+        <h1>Future Work</h1>
+        <p>
+            There are research problems still unanswered in the areas of observability analysis and trajectory generation. The inclusion of higher-order Lie derivatives motivated the formulation of the E\(^2\)LOG as opposed to the observability quality metric proposed in <dt-cite key="krener-2009unobservability"></dt-cite>, further exploration of other metrics for trajectory generation is warranted given the nascency of the area. Empirical results comparing the use of the LOG and the E\(^2\)LOG would aid in understanding what is lost in the Jacobian approximation. Furthermore, the formulation of a general trajectory generation framework that were able to simultaneously optimize for different goals could aid in the incorporation of new desirable qualities of a trajectory. A general framework that had the ability to mix various cost functions might have use cases in real-world robot deployments. For example, if a robot has just been  calibrated, it could weigh the minimization of snap more than the maximization of observability in order to take less agressive maneuvers. Finally, an observability metric that extended to general states and not just self-calibration states might be a good direction of research.
+        </p>
+        <p>
+            In addition to the research problems, there are also extensions that could be made to our simulation. One possible extension of our work would be the extension of our simulation to describe complete three-dimensional motion in \(SO(3)\) since robots operate in this space. Also, our simulation could be extended to include multiple self-calibration states which would validate the multi-state scaling method described in <dt-cite key="preiss-2017trajectory"></dt-cite>. Another interesting extension would be the simulation of sensors whose self-calibration states degrade over time to match the behaviour of real sensors. Finally, an extension that would validate the generality of the framework would be its use on other robotic platforms.
+        </p>
+        <h1>Conclusion</h1>
+        <p>
+            In conclusion, we have presented a framework which optimizes trajectories for observability of self-calibration states by maximizing the smallest singular value of an approximated observability Gramian. We validate the system in the simulation of a modified double integrator system with nonlinear measurements. We compared the results of the EKF state estimator's accuracy using trajectories that were observability-aware and a trajectories which had minimal snap. The simulation results show that the observability-aware trajectories achieve more accurate and confident state estimation over the minimum-snap trajectory.
+        </p>
+    </dt-article>
+    <dt-appendix>
+    </dt-appendix>
+    <script type="text/bibliography">
+        @inproceedings{preiss-2017trajectory,
+            author = "James A. Preiss, Karol Hausman, Gaurav S. Sukhatme and Stephan Weiss",
+            title = "Trajectory Optimization for Self-Calibration and Navigation",
+            booktitle = "Robotics: Science and Systems 2017",
+            year = "2017",
+            url = "http://robotics.usc.edu/publications/962/"
+        }
+        @INPROCEEDINGS{krener-2009unobservability, 
+            author={A. J. Krener and K. Ide}, 
+            booktitle={Proceedings of the 48h IEEE Conference on Decision and Control (CDC) held jointly with 2009 28th Chinese Control Conference}, 
+            title={Measures of unobservability}, 
+            year={2009}, 
+            pages={6401-6406}, 
+            keywords={observability;estimation condition number;observability checking;observability rank condition;observed nonlinear dynamics;output trajectory;unobservability index;unobservability measures;Computational modeling;Linear approximation;Nonlinear dynamical systems;Nonlinear systems;Observability;Trajectory}, 
+            doi={10.1109/CDC.2009.5400067}, 
+            ISSN={0191-2216}, 
+            month={Dec},
+        }
+        @INPROCEEDINGS{mellinger-2011snap, 
+            author={D. Mellinger and V. Kumar}, 
+            booktitle={2011 IEEE International Conference on Robotics and Automation}, 
+            title={Minimum snap trajectory generation and control for quadrotors}, 
+            year={2011}, 
+            pages={2520-2525}, 
+            keywords={aircraft control;mobile robots;nonlinear control systems;position control;remotely operated vehicles;3D positions;controller design;minimum snap trajectory generation;nonlinear controller;quadrotor control;three-dimensional slalom courses;trajectory tracking;yaw angles;Acceleration;Aerodynamics;Angular velocity;Force;Optimization;Rotors;Trajectory}, 
+            doi={10.1109/ICRA.2011.5980409}, 
+            ISSN={1050-4729}, 
+            month={May},
+        }
+        @Book{hespanha-2009systems,
+          author =    {Jo{\~a}o P. Hespanha},
+          title =    {Linear Systems Theory},
+          publisher =    {Princeton Press},
+          year =    2009,
+          address =    {Princeton, New Jersey},
+          month =    "Sep.",
+          note =    {ISBN13: 978-0-691-14021-6. Information about the book, an errata, and exercises
+                          are available at \url{http://www.ece.ucsb.edu/~hespanha/linearsystems/}.},
+          annote =       "Available at \url{http://www.ece.ucsb.edu/~hespanha/published}",
+          annote =       "Available at \url{http://www.ece.ucsb.edu/~hespanha/published}",
+          annote =       "Available at \url{http://www.ece.ucsb.edu/~hespanha/published}",
+          annote =       "Available at \url{http://www.ece.ucsb.edu/~hespanha/published}",
+        }
+        @ARTICLE{hausman-2016observability, 
+        author={K. Hausman and J. Preiss and G. S. Sukhatme and S. Weiss}, 
+        journal={IEEE Robotics and Automation Letters}, 
+        title={Observability-Aware Trajectory Optimization for Self-Calibration With Application to UAVs}, 
+        year={2017}, 
+        volume={2}, 
+        number={3}, 
+        pages={1770-1777}, 
+        keywords={autonomous aerial vehicles;calibration;convergence;helicopters;motion control;nonlinear control systems;observability;optimal control;trajectory optimisation (aerospace);UAV;control inputs;convergence improvement;motion constraints;nonlinear observability;nonlinear systems;observability-aware trajectory-optimization framework;optimal trajectory;quadrotor;self-calibration states;system dynamics;system states;user-chosen states;Convergence;Nonlinear systems;Observability;Robot sensing systems;State estimation;Trajectory optimization;Calibration and identification;aerial robotics;motion and path planning}, 
+        doi={10.1109/LRA.2017.2647799}, 
+        month={July},}
+        @INPROCEEDINGS{levinson-2010robust, 
+            author={J. Levinson and S. Thrun}, 
+            booktitle={2010 IEEE International Conference on Robotics and Automation}, 
+            title={Robust vehicle localization in urban environments using probabilistic maps}, 
+            year={2010}, 
+            pages={4372-4378}, 
+            keywords={Gaussian distribution;navigation;probability;road vehicles;Bayesian inference;GPS-based inertial guidance systems;Gaussian distribution;IMU;LIDAR;SLAM;autonomous vehicle navigation;dynamic urban environment;high-resolution infrared remittance ground map;probabilistic grid;probabilistic maps;robust vehicle localization;spatial grid;Bayesian methods;Gaussian distribution;Global Positioning System;Laser radar;Mobile robots;Navigation;Reflectivity;Remotely operated vehicles;Robustness;Vehicle dynamics}, 
+            doi={10.1109/ROBOT.2010.5509700}, 
+            ISSN={1050-4729}, 
+            month={May},
+        }
+        @book{barfoot_2017state, 
+            place={Cambridge}, 
+            title={State Estimation for Robotics}, 
+            DOI={10.1017/9781316671528}, 
+            publisher={Cambridge University Press}, 
+            author={Barfoot, Timothy D.}, 
+            year={2017}
+        }
+        @article{habib_geometric2011, title={Geometric Calibration and Radiometric Correction of LiDAR Data and Their Impact on the Quality of Derived Products}, volume={11}, ISSN={1424-8220}, url={http://dx.doi.org/10.3390/s110909069}, DOI={10.3390/s110909069}, number={9}, journal={Sensors}, publisher={MDPI AG}, author={Habib, Ayman F. and Kersting, Ana P. and Shaker, Ahmed and Yan, Wai-Yeung}, year={2011}, month={Sep}, pages={9069–9097}}
+        @book{siegwart_introduction2004,
+             author = {Siegwart, Roland and Nourbakhsh, Illah R.},
+            title = {Introduction to Autonomous Mobile Robots},
+            year = {2004},
+            isbn = {026219502X},
+            publisher = {Bradford Company},
+            address = {Scituate, MA, USA},
+        } 
+        @book{thrun_probabilistic2005,
+         author = {Thrun, Sebastian and Burgard, Wolfram and Fox, Dieter},
+         title = {Probabilistic Robotics (Intelligent Robotics and Autonomous Agents)},
+         year = {2005},
+         isbn = {0262201623},
+         publisher = {The MIT Press},
+        } 
+        @article{kaartinen_2015accuracy,
+          title={Accuracy of kinematic positioning using global satellite navigation systems under forest canopies},
+          author={Kaartinen, Harri and Hyypp{\"a}, Juha and Vastaranta, Mikko and Kukko, Antero and Jaakkola, Anttoni and Yu, Xiaowei and Py{\"o}r{\"a}l{\"a}, Jiri and Liang, Xinlian and Liu, Jingbin and Wang, Yungshen and others},
+          journal={Forests},
+          volume={6},
+          number={9},
+          pages={3218--3236},
+          year={2015},
+          publisher={Multidisciplinary Digital Publishing Institute}
+        }
+        @article{maye_2016online,
+        author = {Jérôme Maye and Hannes Sommer and Gabriel Agamennoni and Roland Siegwart and Paul Furgale},
+        title = {Online self-calibration for robotic systems},
+        journal = {The International Journal of Robotics Research},
+        volume = {35},
+        number = {4},
+        pages = {357-380},
+        year = {2016},
+        doi = {10.1177/0278364915596232},
+
+        URL = { 
+                http://dx.doi.org/10.1177/0278364915596232
+            
+        },
+        eprint = { 
+                http://dx.doi.org/10.1177/0278364915596232
+            
+        }
+        ,
+            abstract = { We present a generic algorithm for self-calibration of robotic systems that utilizes two key innovations. First, it uses an information-theoretic measure to automatically identify and store novel measurement sequences. This keeps the computation tractable by discarding redundant information and allows the system to build a sparse but complete calibration dataset from data collected at different times. Second, as the full observability of the calibration parameters may not be guaranteed for an arbitrary measurement sequence, the algorithm detects and locks unobservable directions in parameter space using a combination of rank-revealing QR and singular value decompositions of the Fisher information matrix. The result is an algorithm that listens to an incoming sensor stream, builds a minimal set of data for estimating the calibration parameters, and updates parameters as they become observable, leaving the others locked at their initial guess. We validate our approach through an extensive set of simulated and real-world experiments. }
+        }
+        @article {pandey_2015automatic,
+        author = {Pandey, Gaurav and McBride, James R. and Savarese, Silvio and Eustice, Ryan M.},
+        title = {Automatic Extrinsic Calibration of Vision and Lidar by Maximizing Mutual Information},
+        journal = {Journal of Field Robotics},
+        volume = {32},
+        number = {5},
+        issn = {1556-4967},
+        url = {http://dx.doi.org/10.1002/rob.21542},
+        doi = {10.1002/rob.21542},
+        pages = {696--722},
+        year = {2015},
+        }
+        @article{kelly_2011visual,
+        author = {Jonathan Kelly and Gaurav S Sukhatme},
+        title = {Visual-Inertial Sensor Fusion: Localization, Mapping and Sensor-to-Sensor Self-calibration},
+        journal = {The International Journal of Robotics Research},
+        volume = {30},
+        number = {1},
+        pages = {56-79},
+        year = {2011},
+        doi = {10.1177/0278364910382802},
+
+        URL = { 
+                http://dx.doi.org/10.1177/0278364910382802
+            
+        },
+        eprint = { 
+                http://dx.doi.org/10.1177/0278364910382802
+            
+        }
+        ,
+            abstract = { Visual and inertial sensors, in combination, are able to provide accurate motion estimates and are well suited for use in many robot navigation tasks. However, correct data fusion, and hence overall performance, depends on careful calibration of the rigid body transform between the sensors. Obtaining this calibration information is typically difficult and time-consuming, and normally requires additional equipment. In this paper we describe an algorithm, based on the unscented Kalman filter, for self-calibration of the transform between a camera and an inertial measurement unit (IMU). Our formulation rests on a differential geometric analysis of the observability of the camera—IMU system; this analysis shows that the sensor-to-sensor transform, the IMU gyroscope and accelerometer biases, the local gravity vector, and the metric scene structure can be recovered from camera and IMU measurements alone. While calibrating the transform we simultaneously localize the IMU and build a map of the surroundings, all without additional hardware or prior knowledge about the environment in which a robot is operating. We present results from simulation studies and from experiments with a monocular camera and a low-cost IMU, which demonstrate accurate estimation of both the calibration parameters and the local scene structure. }
+        }
+        @inproceedings{levinson_2014unsupervised,
+          title={Unsupervised calibration for multi-beam lasers},
+          author={Levinson, Jesse and Thrun, Sebastian},
+          booktitle={Experimental Robotics},
+          pages={179--193},
+          year={2014},
+          organization={Springer}
+        }
+
+        @article{budzier_2015calibration,
+          title={Calibration of uncooled thermal infrared cameras},
+          author={Budzier, H and Gerlach, G},
+          journal={Journal of Sensors and Sensor Systems},
+          volume={4},
+          number={1},
+          pages={187--197},
+          year={2015},
+          publisher={Copernicus GmbH}
+        }
+        @article{tan_2016correction,
+          title={Correction of incidence angle and distance effects on TLS intensity data based on reference targets},
+          author={Tan, Kai and Cheng, Xiaojun},
+          journal={Remote Sensing},
+          volume={8},
+          number={3},
+          pages={251},
+          year={2016},
+          publisher={Multidisciplinary Digital Publishing Institute}
+        }
+    </script>
+    <script>
+    // $(".autoplay-video").hover(function toggleControls() {
+    //     if (this.hasAttribute("controls")) {
+    //         this.removeAttribute("controls")
+    //     } else {
+    //         this.setAttribute("controls", "controls")
+    //     }
+    // })
+    document.write('<script src="http://' + (location.host || 'localhost').split(':')[0] + ':35729/livereload.js?snipver=1"></' + 'script>')
+
+
+    // var options = {
+    //     root: document.querySelector('.autoplay-video'),
+    //     rootMargin: '0px',
+    //     threshold: 1.0 // trigger only when element comes into view completely
+    // };
+
+    // var ob = new IntersectionObserver((entries, observer) => {
+    //     if (entries[0].target.paused && !entries[0].target.ended) {
+    //         entries[0].target.play()
+    //     }
+    // }, options);
+
+    // // observe all paragraphs, when coming into view, change color
+    // document.querySelectorAll('.autoplay-video').forEach((item) => {
+    //     ob.observe(item);
+    // });
+    let T_milliseconds = 2500;
+    function interpolateMinSnap(start, end) {
+        var seabornBackgroundColor = "#eaeaf2";
+        var seabornGreen = "#5da973";
+        var seabornBlue = "#4c72b0";
+        let x_0 = 2
+        let x_T = 5
+        let T = T_milliseconds * 1000;
+        let T7 = Math.pow(T, 7)
+        let T6 = Math.pow(T, 6)
+        let T5 = Math.pow(T, 5)
+        let T4 = Math.pow(T, 4)
+        let T3 = Math.pow(T, 3)
+        let T2 = Math.pow(T, 2)
+        let A = [[0, 0, 0, 0, 0, 0, 0, 1],
+                [T7, T6, T5, T4, T3, T2, T, 1],
+                [0, 0, 0, 0, 0, 0, 1, 0],
+                [7 * T6, 6 * T5, 5 * T4, 4 * T3, 3 * T2, 2 * T, 1, 0],
+                [0, 0, 0, 0, 0, 2, 0, 0],
+                [42 * T5, 30 * T4, 20 * T3, 12 * T2, 6 * T, 2, 0, 0],
+                [0, 0, 0, 0, 6, 0 , 0, 0],
+                [210 * T4, 120 * T3, 60 * T2, 24 * T, 6, 0, 0, 0]]
+        let b = [start, end, 0, 0, 0, 0, 0, 0]
+        let x = numeric.solve(A, b)
+        console.log(x);
+        return function(tau) {
+            let t = tau * T;
+            return x[0] * Math.pow(t, 7) + x[1] * Math.pow(t, 6) + x[2] * Math.pow(t, 5) + x[3] * Math.pow(t, 4) + x[4] * Math.pow(t, 3) + x[5] * Math.pow(t, 2) + x[6] * t * x[7] + start;
+        }
+    }
+
+    function interpolateE2log(start, end) {
+        let x0 = start
+        let x1 = start
+        let x2 = start
+        let x3 = end > start ? height : 0
+        let x4 = end
+        let x5 = end
+        let x6 = end
+
+        return function(t) {
+            return 1 * Math.pow((1 - t), 6) * x0 + 6 * Math.pow((1 - t), 5) * Math.pow(t, 1) * x1 + 15 * Math.pow((1 - t), 4) * Math.pow(t, 2) * x2 + 20 * Math.pow((1 - t), 3) * Math.pow(t, 3) * x3 + 15 * Math.pow((1 - t), 2) * Math.pow(t, 4) * x4 + 6 * Math.pow((1 - t), 1) * Math.pow(t, 5) * x5 + 1 * Math.pow(t, 6) * x6;
+        }
+    }
+    var quadrotorDemo = d3.select("#interactive-trajectory"),
+        width = +quadrotorDemo.attr("width"),
+        height = +quadrotorDemo.attr("height"),
+        radius = 10;
+
+    var coordinates = [0, 0];
+
+    var quadrotor = d3.range(1).map(function() {
+        return [width / 2, height / 2]
+    });
+
+    var moving;
+    // Create the quadrotor.
+    quadrotorDemo
+        .selectAll("circle")
+        .data(quadrotor)
+        .enter().append("circle")
+            .attr("cx", (d) => { return d[0]; })
+            .attr("cy", (d) => { return d[1]; })
+            .attr("r", (d) => { return radius; })
+            .style("fill", (d, i) => {return "#4c72b0";})
+        .exit();
+
+    quadrotorDemo.append("path")
+        .attr("stroke", "rgb(77, 77, 77)")
+        .attr("stroke-width", 1)
+
+    // Attach events to the environment.
+    quadrotorDemo
+        .on("click", function() {
+            if (moving) {
+                return;
+            }
+            moving = true;
+            var coordinates = d3.mouse(this);
+            console.log(`Quadrotor: clicked ${d3.mouse(this)}`);
+            var xInterpolator = interpolateE2log(quadrotor[0][0],  coordinates[0]);
+            let yInterpolator = interpolateE2log(quadrotor[0][1], coordinates[1]);
+            quadrotor[0] = d3.mouse(this);
+            quadrotorDemo
+                .select("path")
+                .attr("stroke-width", 0);
+            quadrotorDemo.selectAll("circle")
+                .transition()
+                .duration(T_milliseconds)
+                // .attr("cx", width / 2)
+                .attrTween("cx", function() { return xInterpolator;})
+                .attrTween("cy", function() { return yInterpolator;})
+                .on("end", ()=>{ moving = false; }) 
+        })
+        // .on("mouseover", function() {
+            // quadrotorDemo.append("path")
+            //     .attr("stroke", "rgb(214, 39, 40)")
+            //     .attr("stroke-width", 1)
+        // })
+        .on("mousemove", function() {
+            if (moving) {
+                return;
+            }
+            var coordinates = d3.mouse(this);
+            var xInterpolator = interpolateE2log(quadrotor[0][0],  coordinates[0]);
+            let yInterpolator = interpolateE2log(quadrotor[0][1], coordinates[1]);
+            var bezierCurve = [];
+            for (var i = 0; i < 100; i++) {
+                bezierCurve.push([xInterpolator(i / 100.0), yInterpolator(i / 100.0)])
+            }
+            var lineFunction = d3.line()
+                .x(function(d) { return d[0]; })
+                .y(function(d) {return d[1]; });
+            var lineData = [quadrotor[0], coordinates];
+            quadrotorDemo.select("path")
+                .attr("fill-opacity", 0)
+                .attr("stroke-width", 1)
+                .attr("d", lineFunction(bezierCurve))
+            // We don't want to directly set the quadrotor position. So this is just commented out.
+            // quadrotorDemo.selectAll("circle")
+            //     .attr("cx", coordinates[0])
+            //     .attr("cy", coordinates[1]);
+        })
+        .on("mouseout", function() {
+            quadrotorDemo
+                .select("path")
+                .attr("stroke-width", 0);
+        });        
+
+    d3.selectAll("p").on("click", ()=>{console.log("Clicked a paragraph.");});
+    var blockDiagram = d3.select("#Trajectory_Generator")
+    blockDiagram
+        .on("mouseover", function() {
+            return;
+            d3.select("#goal").style("font-weight", "bold")
+            return blockDiagram.style("fill", "lightgray");
+        })
+        .on("mouseout", function() {
+            return;
+            d3.select("#goal").style("font-weight", "normal")
+            return blockDiagram.style("fill", "white");
+        })
+        .on("click", function() {
+            console.log("Clicked the Block Diagram.");
+        });   
+    </script>
+    <script>
+        // INTERACTIVE_SYSTEM
+        // Representative trajectory of system.
+        // var seabornBackgroundColor = "#eaeaf2";
+        // var seabornGreen = "#5da973";
+        // var seabornBlue = "4c72b0";
+        // var interactiveSystem = d3.select("#interactive-system")
+        // var eelogX = 20;
+        // var minsnapX = 80;
+        // var interactiveSystemHeight = +interactiveSystem.attr('height');
+        // var states = [{pos: [minsnapX, interactiveSystemHeight - 20], color: seabornGreen} , {pos: [eelogX, interactiveSystemHeight - 20], color: seabornBlue} ];
+
+        // interactiveSystem.selectAll("circle")
+        //     .data(states)
+        //     .enter().append("circle")
+        //         .attr("cx", function(d) { return d.pos[0]; })
+        //         .attr("cy", function(d) { return d.pos[1]; })
+        //         .attr("r", radius)
+        //         .style("fill", function(d, i) { return d.color; })
+        // let eelogInterp = interpolateE2log(2, 5);
+        // let minsnapInterp = interpolateMinSnap(2, 5);
+        // interactiveSystem
+        //     .on('mousemove', function() {
+        //         var coordinates = d3.mouse(this);
+        //         let percent = coordinates[1] / interactiveSystemHeight;
+        //         states[0].pos[1] = interactiveSystemHeight - 10 * eelogInterp(percent);
+        //         states[1].pos[1] = interactiveSystemHeight - 10 * minsnapInterp(percent);
+        //         interactiveSystem.selectAll("circle")
+        //             .transition().delay(100)
+        //                 .attr("cx", function(d) { return d.pos[0]; })
+            //             .attr("cy", function(d) { return d.pos[1]; })
+            // })
+    </script>
+    <script>
+        let bezierKnots = [[100, 200],
+                           [400, 20], 
+                           [300, 300], 
+                           [450, 275],
+                           [500, 200]]
+        let hull = d3.polygonHull(bezierKnots);
+
+        var lineFunction = d3.line()
+            .x(function(d) { return d[0]; })
+            .y(function(d) { return d[1]; });
+        function bezier(t) {
+            return numeric.add(
+                numeric.dot(1 * Math.pow((1 - t), 4), bezierKnots[0]),
+                numeric.dot(4 * Math.pow((1 - t), 3) * Math.pow(t, 1), bezierKnots[1]),
+                numeric.dot(6 * Math.pow((1 - t), 2) * Math.pow(t, 2), bezierKnots[2]),
+                numeric.dot(4 * Math.pow((1 - t), 1) * Math.pow(t, 3), bezierKnots[3]), 
+                numeric.dot(1 * Math.pow(t, 4), bezierKnots[4]));
+        }
+        var convexBezier = d3.select("#convex-bezier")
+        convexBezier
+            .on("click", function() {
+                console.log("click");
+            })
+            .on("mouseover", function() {
+                console.log("mouseover");
+            })
+            .on("mousedown", function() {
+                console.log("mousedown");
+            })
+            .on("mousemove", function() {
+                console.log("mousemove");
+            })
+
+        /* My attempt.
+            .selectAll("circle")
+            .data(bezierKnots)
+            .enter().append("circle")
+                .attr("cx", function(d) { return d[0]; })
+                .attr("cy", function(d) { return d[1]; })
+                .attr("r", 10)
+        */
+
+        var color = d3.scaleOrdinal()
+            .range(d3.schemeCategory20);
+
+        // Draw convex hull.
+        convexBezier
+            .append("path")
+            .attr("id", "interactive-convex")
+            .attr("stroke", "black")
+            .attr("stroke-width", 0)
+            .attr("d", lineFunction(hull))
+            .attr("fill", "rgb(242, 242, 242)")
+        var bezierCurve = [];
+        for (var i = 0; i < 100; i++) {
+            bezierCurve.push(bezier(i / 100.0))
+        }
+
+        // Draw Bezier.
+        convexBezier
+            .append("path")
+            .attr("id", "interactive-bezier")
+            .attr("stroke", "rgb(77, 77, 77)")
+            .attr("stroke-width", 1)
+            .attr("d", lineFunction(bezierCurve))
+            .attr("fill-opacity", 0)
+
+        convexBezier.selectAll("circle")
+          .data(bezierKnots)
+          .enter().append("circle")
+            .attr("cx", function(d) { return d[0]; })
+            .attr("cy", function(d) { return d[1]; })
+            .attr("r", radius)
+            .style("fill", function(d, i) { return "#4c72b0"; return color(i); })
+            .call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended))
+            .append("text")
+
+
+        function dragstarted(d) {
+          d3.select(this).raise().classed("active", true);
+        }
+
+        function dragged(d) {
+            d3.select(this).attr("cx", d[0] = d3.event.x).attr("cy", d[1] = d3.event.y);
+            hull = d3.polygonHull(bezierKnots);
+            bezierCurve = [];
+            for (var i = 0; i < 100; i++) {
+                bezierCurve.push(bezier(i / 100.0))
+            }
+            var hullPoints = [[hull[0][0], hull[0][1]]];
+            for (var i = 1, n = hull.length; i < n; ++i) {
+                hullPoints.push([hull[i][0], hull[i][1]]);
+            }
+            hullPoints.push([hull[0][0], hull[0][1]])
+            convexBezier
+                .select("#interactive-convex")
+                .attr("stroke", "black")
+                .attr("d", lineFunction(hullPoints))
+                .attr("fill", "rgb(242, 242, 242)")
+            convexBezier
+                .select("#interactive-bezier")
+                .attr("stroke", "rgb(77, 77, 77)")
+                .attr("stroke-width", 1)
+                .attr("d", lineFunction(bezierCurve))
+                .attr("fill-opacity", 0)
+        }
+
+        function dragended(d) {
+          d3.select(this).classed("active", false);
+        }
+    </script>
+
 </body>
+
 </html>
